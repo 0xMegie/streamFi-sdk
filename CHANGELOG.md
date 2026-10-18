@@ -5,6 +5,7 @@ All notable changes are documented here. Format based on [Keep a Changelog](http
 ## [Unreleased]
 
 ### Added
+- `@streamfi/react` stream lifecycle hooks: `useCreateBatchStreams().estimateTotalBatchCost(configs)` sums batch deposits into stroops before submission; `useCancelStream().estimatedRefund` exposes the sender's unstreamed balance (`null` when unknown); `usePauseStream().isPausing` is true only while the pause transaction is pending; and `useResumeStream().resume()` rejects without submitting when the loaded stream is active or cancelled.
 - `@streamfi/react`: `useTopUpStream()` returns `projectNewEndTime(amount)`, the stream's end date after a top-up, computed from the stream's rate and end time (the top-up adds `amount / ratePerSecond`, rounded up to whole seconds). It returns `null` while the stream is loading, for open-ended streams, zero rates and non-positive amounts. The stream is refetched after each successful top-up (#990).
 - `@streamfi/react`: `useTokenAllowance()` returns `approveInfinite(expirationLedger)`, which approves `i128::MAX` so future streams need no re-approval. The expiration is passed explicitly because SEP-41 requires a valid expiration for a non-zero amount (#991).
 - `@streamfi/react`: `useStreamHistoryInfinite(streamId, pageSize, { filterEventTypes })` keeps only the requested categories from the loaded entries: `Deposit` (created and top-up events), `Withdraw` and `Cancel` (#992).
