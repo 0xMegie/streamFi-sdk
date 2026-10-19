@@ -15,7 +15,15 @@
 
 import { SorobanRpc } from '@stellar/stellar-sdk';
 
-const registry = new Map<string, typeof fetch>();
+/** Default per-request timeout for custom-fetch RPC calls (#926). */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+
+interface Registration {
+  fetch: typeof fetch;
+  timeoutMs: number;
+}
+
+const registry = new Map<string, Registration>();
 let installed = false;
 
 /** Minimal slice of the axios request config the adapter reads. */
@@ -119,8 +127,8 @@ async function retryGatewayErrors(send: () => Promise<unknown>, signal?: AbortSi
 
 async function fetchAdapter(config: RequestConfig): Promise<unknown> {
   const url = config.url ?? '';
-  const customFetch = registry.get(stripTrailingSlash(url));
-  if (!customFetch) throw new Error(`No custom fetch registered for ${url}`);
+  const registration = registry.get(stripTrailingSlash(url));
+  if (!registration) throw new Error(`No custom fetch registered for ${url}`);
 
   const send = () => sendOnce(config, url, customFetch);
   return isIdempotentRequest(config) ? retryGatewayErrors(send, config.signal) : send();
@@ -136,13 +144,19 @@ async function sendOnce(config: RequestConfig, url: string, customFetch: typeof 
   const init: RequestInit = {
     method: (config.method ?? 'post').toUpperCase(),
     headers: headerRecord(config),
+    signal: controller.signal,
   };
   if (config.data !== undefined) init.body = typeof config.data === 'string' ? config.data : JSON.stringify(config.data);
-  if (signals.length === 1) init.signal = signals[0]!;
-  else if (signals.length > 1 && typeof AbortSignal.any === 'function') init.signal = AbortSignal.any(signals);
 
-  const res = await customFetch(url, init);
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await registration.fetch(url, init);
+    text = await res.text();
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    config.signal?.removeEventListener('abort', onCallerAbort);
+  }
   const response = {
     // axios's transformResponse parses JSON from a string body.
     data: text,
@@ -178,13 +192,24 @@ function install(): void {
   });
 }
 
-/** Route Soroban RPC requests for `rpcUrl` through `customFetch`. */
-export function registerCustomFetch(rpcUrl: string, customFetch: typeof fetch): void {
+/**
+ * Route Soroban RPC requests for `rpcUrl` through `customFetch`. Each request
+ * is aborted after `timeoutMs` (default {@link DEFAULT_REQUEST_TIMEOUT_MS});
+ * pass `0` to disable the timeout.
+ */
+export function registerCustomFetch(
+  rpcUrl: string,
+  customFetch: typeof fetch,
+  timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
+): void {
   if (typeof customFetch !== 'function') {
     throw new TypeError('customFetch must be a function');
   }
   install();
-  registry.set(stripTrailingSlash(rpcUrl), customFetch);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+    throw new RangeError('timeoutMs must be a non-negative finite number');
+  }
+  registry.set(stripTrailingSlash(rpcUrl), { fetch: customFetch, timeoutMs });
 }
 
 /** Remove a registration made by {@link registerCustomFetch}. Mainly for tests. */

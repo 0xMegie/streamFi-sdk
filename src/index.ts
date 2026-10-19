@@ -84,7 +84,7 @@ export * from './adapters/index.js';
 export * from './react/index.js';
 export { FeeEstimator } from './fee-estimator.js';
 export type { FeeEstimatorOptions, FeeEstimateOptions, FeePriority, DynamicFeeOptions } from './fee-estimator.js';
-export { coalesceAsync } from './coalesce-async.js';
+export { coalesceAsync, coalesceInFlight } from './coalesce-async.js';
 export { WebSocketRelayer } from './relayer/WebSocketRelayer.js';
 export { ErrorMapper, DEFAULT_ERROR_MESSAGE_TYPE_MAP } from './relayer/ErrorMapper.js';
 export type { MappedErrorHandler, ErrorMessageTypeMap } from './relayer/ErrorMapper.js';
